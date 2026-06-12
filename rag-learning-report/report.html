@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAG 学习报告 - LangChain.js + 智谱 API</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        .header {
+            background: white;
+            padding: 40px;
+            border-radius: 20px 20px 0 0;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }
+        .header h1 {
+            color: #333;
+            font-size: 2.2rem;
+            margin-bottom: 10px;
+        }
+        .header p {
+            color: #666;
+            font-size: 1.1rem;
+        }
+        .tag {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            margin-top: 15px;
+        }
+        .section {
+            background: white;
+            margin-top: 20px;
+            padding: 35px;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.08);
+        }
+        .section h2 {
+            color: #333;
+            font-size: 1.5rem;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+        .section h3 {
+            color: #444;
+            font-size: 1.2rem;
+            margin: 20px 0 15px;
+        }
+        .file-tree {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+            line-height: 1.8;
+            color: #333;
+        }
+        .file-tree span.folder { color: #667eea; }
+        .file-tree span.file { color: #333; }
+        .file-tree span.ts { color: #3178c6; }
+        .file-tree span.md { color: #676e95; }
+        .file-tree span.env { color: #60a5fa; }
+        
+        .flowchart {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            padding: 30px;
+            border-radius: 12px;
+            margin: 20px 0;
+        }
+        .flow-step {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .flow-step:last-child { margin-bottom: 0; }
+        .flow-num {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            flex-shrink: 0;
+        }
+        .flow-text {
+            font-size: 1rem;
+            color: #444;
+        }
+        .code-block {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 10px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.85rem;
+            line-height: 1.6;
+            overflow-x: auto;
+            margin: 15px 0;
+        }
+        .code-block .keyword { color: #569cd6; }
+        .code-block .string { color: #ce9178; }
+        .code-block .comment { color: #6a9955; }
+        .code-block .function { color: #dcdcaa; }
+        
+        .success-box {
+            background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+            border-left: 4px solid #28a745;
+            padding: 20px;
+            border-radius: 0 10px 10px 0;
+            margin: 20px 0;
+        }
+        .success-box p {
+            color: #155724;
+            font-weight: 500;
+        }
+        
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .feature-card {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 12px;
+            text-align: center;
+            transition: transform 0.2s;
+        }
+        .feature-card:hover {
+            transform: translateY(-3px);
+        }
+        .feature-card .icon {
+            font-size: 2.5rem;
+            margin-bottom: 15px;
+        }
+        .feature-card h4 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .feature-card p {
+            color: #666;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+        
+        .terminal {
+            background: #1a1a1a;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 20px 0;
+        }
+        .terminal-header {
+            background: #333;
+            padding: 10px 15px;
+            display: flex;
+            gap: 10px;
+        }
+        .terminal-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+        .terminal-dot.red { background: #ff5f56; }
+        .terminal-dot.yellow { background: #ffbd2e; }
+        .terminal-dot.green { background: #27c93f; }
+        .terminal-body {
+            padding: 20px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.85rem;
+            color: #4ec9b0;
+            line-height: 1.6;
+        }
+        .terminal-body .prompt { color: #569cd6; }
+        .terminal-body .success { color: #4ec9b0; }
+        .terminal-body .error { color: #ff5f56; }
+        
+        .footer {
+            text-align: center;
+            color: rgba(255,255,255,0.8);
+            margin-top: 40px;
+            font-size: 0.9rem;
+        }
+        
+        .btn {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 30px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 500;
+            margin-top: 20px;
+            transition: opacity 0.2s;
+        }
+        .btn:hover { opacity: 0.9; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>📚 RAG 学习报告</h1>
+            <p>LangChain.js + 智谱 API 完整实战指南</p>
+            <span class="tag">✓ 项目已跑通</span>
+            <span class="tag">✓ API 调用正常</span>
+            <span class="tag">✓ 完整流程验证</span>
+        </div>
+
+        <!-- Project Structure -->
+        <div class="section">
+            <h2>📁 项目结构</h2>
+            <div class="file-tree">
+                <span class="folder">aiTestLearning/</span><br>
+                &nbsp;&nbsp;├── <span class="env">.env</span>              # 环境变量配置<br>
+                &nbsp;&nbsp;├── <span class="file">package.json</span>       # 依赖管理<br>
+                &nbsp;&nbsp;├── <span class="file">tsconfig.json</span>      # TypeScript 配置<br>
+                &nbsp;&nbsp;├── <span class="folder">data/</span><br>
+                &nbsp;&nbsp;│   └── <span class="md">sample.md</span>      # 知识库文档<br>
+                &nbsp;&nbsp;└── <span class="folder">src/</span><br>
+                &nbsp;&nbsp;    ├── <span class="ts">index.ts</span>        # 应用入口<br>
+                &nbsp;&nbsp;    ├── <span class="folder">routes/</span><br>
+                &nbsp;&nbsp;    │   └── <span class="ts">chat.ts</span>    # API 路由<br>
+                &nbsp;&nbsp;    └── <span class="folder">rag/</span><br>
+                &nbsp;&nbsp;        ├── <span class="ts">loader.ts</span>   # 文档加载<br>
+                &nbsp;&nbsp;        ├── <span class="ts">splitter.ts</span> # 文档切分<br>
+                &nbsp;&nbsp;        ├── <span class="ts">store.ts</span>    # 向量存储<br>
+                &nbsp;&nbsp;        └── <span class="ts">chain.ts</span>    # RAG 链核心<br>
+            </div>
+        </div>
+
+        <!-- Flow -->
+        <div class="section">
+            <h2>🔄 完整调用流程</h2>
+            <div class="flowchart">
+                <div class="flow-step">
+                    <div class="flow-num">1</div>
+                    <div class="flow-text"><strong>用户请求</strong>: <code>POST /api/chat { question }</code></div>
+                </div>
+                <div class="flow-step">
+                    <div class="flow-num">2</div>
+                    <div class="flow-text"><strong>语义检索</strong>: 问题向量化 → 在向量库中查找最相关文档</div>
+                </div>
+                <div class="flow-step">
+                    <div class="flow-num">3</div>
+                    <div class="flow-text"><strong>构建提示词</strong>: 将检索结果与问题拼接成完整 prompt</div>
+                </div>
+                <div class="flow-step">
+                    <div class="flow-num">4</div>
+                    <div class="flow-text"><strong>调用智谱 API</strong>: 使用 glm-4-flash 生成回答</div>
+                </div>
+                <div class="flow-step">
+                    <div class="flow-num">5</div>
+                    <div class="flow-text"><strong>返回结果</strong>: <code>{ answer }</code></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Core Components -->
+        <div class="section">
+            <h2>⚙️ 核心组件详解</h2>
+            
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <div class="icon">📥</div>
+                    <h4>loader.ts</h4>
+                    <p>加载本地 Markdown/TXT 文件，封装为 LangChain Document 对象</p>
+                </div>
+                <div class="feature-card">
+                    <div class="icon">✂️</div>
+                    <h4>splitter.ts</h4>
+                    <p>将大文档切分为 500 字符的小块，保留上下文重叠</p>
+                </div>
+                <div class="feature-card">
+                    <div class="icon">📊</div>
+                    <h4>store.ts</h4>
+                    <p>内存向量存储，支持快速语义检索（可扩展到持久化存储）</p>
+                </div>
+                <div class="feature-card">
+                    <div class="icon">🔗</div>
+                    <h4>chain.ts</h4>
+                    <p>核心 RAG 链：检索 → 提示词 → LLM → 输出</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Test Results -->
+        <div class="section">
+            <h2>✅ 测试验证结果</h2>
+            
+            <div class="terminal">
+                <div class="terminal-header">
+                    <div class="terminal-dot red"></div>
+                    <div class="terminal-dot yellow"></div>
+                    <div class="terminal-dot green"></div>
+                </div>
+                <div class="terminal-body">
+                    <span class="prompt">user@localhost:~$</span> npx tsx src/test-rag.ts<br>
+                    <br>
+                    ======== 问题: 年假有几天？ ========<br>
+                    <span class="success">回答: 员工入职满1年后，享有5天年假。入职满5年后，年假增加至10天。</span><br>
+                    <br>
+                    ======== 问题: 病假需要什么证明？ ========<br>
+                    <span class="success">回答: 病假需要提供医院开具的病假条。如果连续病假超过3天，还需提供三甲医院的证明。</span><br>
+                    <br>
+                    ======== 问题: 加班怎么算工资？ ========<br>
+                    <span class="success">回答: 工作日加班按1.5倍工资计算，周末加班按2倍，法定节假日按3倍。</span><br>
+                </div>
+            </div>
+        </div>
+
+        <!-- API Testing -->
+        <div class="section">
+            <h2>🌐 API 接口测试</h2>
+            
+            <div class="success-box">
+                <p>✓ HTTP 接口测试通过</p>
+            </div>
+            
+            <div class="code-block">
+                <span class="comment">// 请求示例</span><br>
+                POST <span class="string">http://localhost:8081/api/chat</span><br>
+                Content-Type: <span class="string">application/json</span><br>
+                <br>
+                {<br>
+                &nbsp;&nbsp;<span class="string">"question"</span>: <span class="string">"年假有几天？"</span><br>
+                }<br>
+                <br>
+                <span class="comment">// 响应示例</span><br>
+                {<br>
+                &nbsp;&nbsp;<span class="string">"answer"</span>: <span class="string">"员工入职满1年后，享有5天年假。入职满5年后，年假增加至10天。"</span><br>
+                }
+            </div>
+        </div>
+
+        <!-- Quick Start -->
+        <div class="section">
+            <h2>🚀 快速启动</h2>
+            
+            <div class="code-block">
+                <span class="comment"># 安装依赖</span><br>
+                <span class="keyword">npm</span> install<br>
+                <br>
+                <span class="comment"># 配置 API Key（编辑 .env 文件）</span><br>
+                <span class="keyword">echo</span> <span class="string">"ZHIPU_API_KEY='your-key'"</span> &gt; .env<br>
+                <br>
+                <span class="comment"># 启动服务</span><br>
+                npx tsx src/index.ts<br>
+                <br>
+                <span class="comment"># 测试完整 RAG 流程</span><br>
+                npx tsx src/test-rag.ts<br>
+            </div>
+        </div>
+
+        <!-- Next Steps -->
+        <div class="section">
+            <h2>📈 下一步学习建议</h2>
+            
+            <h3>1. 完善向量嵌入</h3>
+            <p>当前使用 <code>SyntheticEmbeddings</code>（假向量），建议替换为智谱 embedding API 或开源本地模型（如 BGE）</p>
+            
+            <h3>2. 持久化向量库</h3>
+            <p>替换 <code>MemoryVectorStore</code> 为 <code>Qdrant</code>、<code>Chroma</code> 或 <code>Pinecone</code></p>
+            
+            <h3>3. 添加前端界面</h3>
+            <p>创建聊天 UI，实现可视化问答交互</p>
+            
+            <h3>4. 进阶 Agent 开发</h3>
+            <p>学习 LangGraph，实现工具调用、多步骤推理等 Agent 能力</p>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <p>RAG Learning Report | Generated on June 2026</p>
+            <p style="margin-top: 10px; opacity: 0.7;">Powered by LangChain.js + 智谱 GLM-4</p>
+        </div>
+    </div>
+</body>
+</html>
