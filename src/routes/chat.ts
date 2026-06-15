@@ -15,7 +15,7 @@ export async function initChat() {
 
 // 问答接口
 router.post("/chat", async (req: Request, res: Response) => {
-  console.log("收到提问:", req.body.question);
+  console.log("收到提问:", req.body, req.body.question);
   try {
     const { question } = req.body;
     if (!question) {

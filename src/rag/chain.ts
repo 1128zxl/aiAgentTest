@@ -80,18 +80,23 @@ export function createRAGChain(vectorStore: MemoryVectorStore) {
 
   const chain = RunnableSequence.from([
     {
-      // 1) 把用户问题传给检索器，拿到最相关的文档片段
-      context: retriever.pipe((docs: any[]) =>
-        docs.map((d, i) => `[${i + 1}] ${d.pageContent}`).join("\n\n"),
-      ),
-      // 2) 原样透传用户问题，供提示词模板使用
+      context: retriever.pipe((docs: any[]) => {
+        console.log(`🔍 检索到 ${docs.length} 条相关文档`);
+        docs.forEach((d, i) => {
+          console.log(`   [${i + 1}] ${d.pageContent.substring(0, 80)}...`);
+        });
+        if (docs.length === 0) {
+          return "【未找到相关文档】";
+        }
+        return docs.map((d, i) => `[${i + 1}] ${d.pageContent}`).join("\n\n");
+      }),
       question: new RunnablePassthrough(),
     },
-    // 3) 拼接成最终提示词字符串
     new RunnableLambda({ func: buildPrompt }),
-    // 4) 调智谱 LLM
-    new RunnableLambda({ func: callZhipuLLM }),
-    // 5) 上面已经返回 string，不需要再 StringOutputParser
+    new RunnableLambda({ func: (prompt: string) => {
+      console.log(`\n📤 发送给 LLM 的 prompt (前 200 字):\n${prompt.substring(0, 200)}...\n`);
+      return callZhipuLLM(prompt);
+    }}),
   ]);
 
   return chain;
