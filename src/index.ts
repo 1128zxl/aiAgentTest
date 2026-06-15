@@ -25,6 +25,24 @@ app.use(express.json({ limit: "10mb" }));
 app.use("/api", chatRouter);
 
 const PORT = process.env.PORT || 3000;
+const DATA_DIR = "./data";
+
+async function loadAllDocuments(): Promise<any[]> {
+  const docs: any[] = [];
+  const files = fs.readdirSync(DATA_DIR);
+  
+  for (const file of files) {
+    const ext = path.extname(file).toLowerCase();
+    if (ext === ".md" || ext === ".docx") {
+      const filePath = path.join(DATA_DIR, file);
+      console.log(`🔍 发现文档: ${file}`);
+      const doc = await loadLocalFile(filePath);
+      docs.push(doc);
+    }
+  }
+  
+  return docs;
+}
 
 async function bootstrap() {
   try {
@@ -35,10 +53,12 @@ async function bootstrap() {
     const storeExists = await vectorStoreExists();
     if (!storeExists) {
       console.log("\n📦 未检测到向量库，开始初始化...");
-      const docs = await loadLocalFile("./data/sample.md");
-      console.log(`✅ 加载文档: ${docs.metadata.source}`);
+      console.log(`🔍 扫描 ${DATA_DIR}/ 目录...`);
       
-      const splits = await splitDocuments([docs]);
+      const docs = await loadAllDocuments();
+      console.log(`✅ 共加载 ${docs.length} 个文档`);
+      
+      const splits = await splitDocuments(docs);
       await addDocumentsToStore(splits);
     } else {
       console.log("\n✅ 检测到已存在的 Qdrant 向量库");
