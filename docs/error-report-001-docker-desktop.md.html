@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>错误处理报告 - Docker Desktop WSL 网络问题</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #f5f5f5;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        /* 头部 */
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px;
+            border-radius: 16px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 40px rgba(102, 126, 234, 0.3);
+        }
+
+        .header h1 {
+            font-size: 2.2em;
+            margin-bottom: 10px;
+        }
+
+        .header .meta {
+            opacity: 0.9;
+            font-size: 0.95em;
+        }
+
+        .header .badge {
+            display: inline-block;
+            background: rgba(255,255,255,0.2);
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            margin-top: 15px;
+        }
+
+        /* 卡片 */
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        }
+
+        .card-title {
+            font-size: 1.3em;
+            color: #1a1a2e;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #f0f0f0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .card-title .icon {
+            font-size: 1.2em;
+        }
+
+        /* 严重程度标签 */
+        .severity {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+
+        .severity.high {
+            background: #fee;
+            color: #c00;
+        }
+
+        .severity.medium {
+            background: #ffa;
+            color: #a60;
+        }
+
+        .severity.low {
+            background: #dfd;
+            color: #060;
+        }
+
+        /* 信息表格 */
+        .info-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .info-table td {
+            padding: 12px 0;
+            border-bottom: 1px solid #eee;
+            vertical-align: top;
+        }
+
+        .info-table td:first-child {
+            font-weight: 600;
+            color: #666;
+            width: 120px;
+        }
+
+        /* 代码块 */
+        .code-block {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-family: "Fira Code", "Consolas", monospace;
+            font-size: 0.9em;
+            line-height: 1.8;
+        }
+
+        .code-block .comment {
+            color: #6a9955;
+        }
+
+        .code-block .command {
+            color: #569cd6;
+        }
+
+        .code-block .output {
+            color: #4ec9b0;
+        }
+
+        /* 错误代码 */
+        .error-code {
+            display: inline-block;
+            background: #fff3cd;
+            color: #856404;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 1.1em;
+            border: 1px solid #ffeeba;
+        }
+
+        /* 图片区域 */
+        .screenshot-area {
+            background: #f8f9fa;
+            border: 2px dashed #dee2e6;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            color: #6c757d;
+        }
+
+        .screenshot-area .placeholder {
+            font-size: 3em;
+            margin-bottom: 10px;
+        }
+
+        /* 步骤列表 */
+        .step-list {
+            list-style: none;
+            counter-reset: step;
+        }
+
+        .step-list li {
+            counter-increment: step;
+            padding: 15px 15px 15px 50px;
+            position: relative;
+            border-left: 2px solid #e0e0e0;
+            margin-left: 15px;
+        }
+
+        .step-list li:last-child {
+            border-left-color: transparent;
+        }
+
+        .step-list li::before {
+            content: counter(step);
+            position: absolute;
+            left: -17px;
+            top: 15px;
+            width: 32px;
+            height: 32px;
+            background: #667eea;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 0.9em;
+        }
+
+        /* 状态标签 */
+        .status {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: 500;
+        }
+
+        .status.resolved {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status.pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        /* 底部导航 */
+        .footer {
+            text-align: center;
+            padding: 30px;
+            color: #888;
+            font-size: 0.9em;
+        }
+
+        .footer a {
+            color: #667eea;
+            text-decoration: none;
+        }
+
+        /* 响应式 */
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px 15px;
+            }
+
+            .header {
+                padding: 25px;
+            }
+
+            .header h1 {
+                font-size: 1.6em;
+            }
+
+            .card {
+                padding: 20px;
+            }
+
+            .code-block {
+                font-size: 0.8em;
+                padding: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 头部 -->
+        <div class="header">
+            <h1>🛠️ 错误处理报告</h1>
+            <div class="meta">AI Test Learning 项目 · 长期维护文档</div>
+            <div class="badge">📅 最后更新: 2026-06-16</div>
+        </div>
+
+        <!-- 错误详情 -->
+        <div class="card">
+            <div class="card-title">
+                <span class="icon">🐳</span>
+                错误 #001: Docker Desktop 重装后无法启动
+                <span class="severity high">🔴 高严重程度</span>
+            </div>
+
+            <table class="info-table">
+                <tr>
+                    <td>错误代码</td>
+                    <td>
+                        <span class="error-code">0x8007273f</span>
+                    </td>
+                </tr>
+                <tr>
+                    <td>错误信息</td>
+                    <td>WSL network configuration is corrupted</td>
+                </tr>
+                <tr>
+                    <td>发生日期</td>
+                    <td>2026-06-16</td>
+                </tr>
+                <tr>
+                    <td>影响范围</td>
+                    <td>Docker Desktop 无法启动，Qdrant 容器无法运行</td>
+                </tr>
+                <tr>
+                    <td>状态</td>
+                    <td>
+                        <span class="status resolved">✅ 已解决</span>
+                    </td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- 问题描述 -->
+        <div class="card">
+            <div class="card-title">
+                <span class="icon">📋</span>
+                问题描述
+            </div>
+
+            <p>Docker Desktop 卸载后重新安装，打开时立即报错，无法进入主界面。具体表现为：</p>
+            <br>
+            <ul style="margin-left: 20px;">
+                <li>Docker Desktop 启动时立即弹出错误对话框</li>
+                <li>错误信息包含 "WSL network configuration is corrupted"</li>
+                <li>点击 "Reset to factory defaults" 重置后仍然报错</li>
+                <li>多次重装 Docker Desktop 问题依旧</li>
+            </ul>
+        </div>
+
+        <!-- 错误截图 -->
+        <div class="card">
+            <div class="card-title">
+                <span class="icon">📷</span>
+                错误截图
+            </div>
+
+            <div class="screenshot-area">
+                <div class="placeholder">🖼️</div>
+                <p>请在此处粘贴错误截图</p>
+                <p style="font-size: 0.85em; margin-top: 10px; color: #999;">
+                    建议尺寸: 800px 宽度
+                </p>
+            </div>
+        </div>
+
+        <!-- 根本原因 -->
+        <div class="card">
+            <div class="card-title">
+                <span class="icon">🔍</span>
+                根本原因分析
+            </div>
+
+            <p>此错误的根本原因是 <strong>WSL 虚拟网络适配器或网络配置损坏</strong>，通常由以下原因引起：</p>
+            <br>
+            <ul style="margin-left: 20px;">
+                <li>Docker Desktop 卸载/重装过程中配置未正确清理</li>
+                <li>WSL 虚拟交换机（vEthernet）配置冲突</li>
+                <li>Windows 网络栈状态异常</li>
+                <li>Hyper-V 虚拟网络组件损坏</li>
+            </ul>
+        </div>
+
+        <!-- 解决方案 -->
+        <div class="card">
+            <div class="card-title">
+                <span class="icon">✅</span>
+                解决方案
+            </div>
+
+            <p>执行以下命令重置 WSL 网络配置：</p>
+            <br>
+
+            <div class="code-block">
+<span class="comment"># 步骤 1: 停止 WSL</span>
+<span class="command">wsl --shutdown</span>
+
+<span class="comment"># 步骤 2: 重置 Windows 网络栈</span>
+<span class="command">netsh winsock reset</span>
+<span class="command">netsh int ip reset</span>
+
+<span class="comment"># 步骤 3: 重启电脑（必须！）</span>
+<span class="command">Restart-Computer</span>
+            </div>
+
+            <br>
+            <p style="color: #d9534f; font-weight: 500;">
+                ⚠️ 注意：必须重启电脑，命令才能生效！
+            </p>
+        </div>
+
+        <!-- 验证 -->
+        <div class="card">
+            <div class="card-title">
+                <span class="icon">🔎</span>
+                验证方法
+            </div>
+
+            <p>重启电脑后，执行以下命令验证修复是否成功：</p>
+            <br>
+
+            <div class="code-block">
+<span class="comment"># 验证 WSL 是否正常</span>
+<span class="command">wsl -d Ubuntu-22.04</span>
+<span class="output"># 应该能正常进入 Ubuntu</span>
+
+<span class="comment"># 验证 Docker Desktop 是否能启动</span>
+<span class="comment"># 手动打开 Docker Desktop，应该能正常进入</span>
+
+<span class="comment"># 验证 Qdrant 容器</span>
+<span class="command">docker run -d -p 6333:6333 -v ~/qdrant-data:/qdrant/storage --name qdrant qdrant/qdrant</span>
+<span class="output"># 应该能成功创建并运行容器</span>
+            </div>
+        </div>
+
+        <!-- 其他解决方案 -->
+        <div class="card">
+            <div class="card-title">
+                <span class="icon">📚</span>
+                其他可选方案
+            </div>
+
+            <p>如果上述方案无效，可以尝试以下方法：</p>
+            <br>
+
+            <ol class="step-list">
+                <li>
+                    <strong>方案 A: 重建 WSL 虚拟交换机</strong><br>
+                    <span style="color: #666;">
+                        在 PowerShell（管理员）中执行：
+                    </span>
+                    <div class="code-block" style="margin-top: 10px;">
+<span class="command">wsl --shutdown</span>
+<span class="command">Get-VMSwitch | Where-Object { $_.Name -like "*WSL*" } | Remove-VMSwitch -Force</span>
+<span class="command">Restart-Computer</span>
+                    </div>
+                </li>
+                <li>
+                    <strong>方案 B: 删除 WSL 配置</strong><br>
+                    <span style="color: #666;">
+                        删除 WSL 配置文件（系统会自动重建）：
+                    </span>
+                    <div class="code-block" style="margin-top: 10px;">
+<span class="command">wsl --shutdown</span>
+<span class="command">Remove-Item -Path "$env:USERPROFILE\.wslconfig" -ErrorAction SilentlyContinue</span>
+<span class="command">wsl -d Ubuntu-22.04</span>
+                    </div>
+                </li>
+                <li>
+                    <strong>方案 C: 重新安装 WSL</strong><br>
+                    <span style="color: #666;">
+                        最后手段，完全重装 WSL 分发版：
+                    </span>
+                    <div class="code-block" style="margin-top: 10px;">
+<span class="command">wsl --shutdown</span>
+<span class="command">wsl --unregister Ubuntu-22.04</span>
+<span class="command">wsl --install -d Ubuntu-22.04</span>
+                    </div>
+                </li>
+            </ol>
+        </div>
+
+        <!-- 相关链接 -->
+        <div class="card">
+            <div class="card-title">
+                <span class="icon">🔗</span>
+                相关文档
+            </div>
+
+            <ul style="margin-left: 20px;">
+                <li><a href="error-handbook.md">错误处理手册（Markdown 版）</a></li>
+                <li><a href="../aiTestLearning/index.html">AI Test Learning 项目</a></li>
+                <li>Docker Desktop 官方文档: <a href="https://docs.docker.com/desktop/install/windows-install/">Windows Install Guide</a></li>
+                <li>WSL 官方文档: <a href="https://docs.microsoft.com/zh-cn/windows/wsl/">WSL 文档</a></li>
+            </ul>
+        </div>
+
+        <!-- 底部 -->
+        <div class="footer">
+            <p>🛠️ AI Test Learning 项目 · 错误处理报告</p>
+            <p style="margin-top: 5px;">遇到新错误？联系项目维护者添加到本手册</p>
+        </div>
+    </div>
+</body>
+</html>

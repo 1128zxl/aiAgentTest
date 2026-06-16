@@ -3,7 +3,7 @@ import {
   RunnablePassthrough,
   RunnableLambda,
 } from "@langchain/core/runnables";
-import { MemoryVectorStore } from "@langchain/classic/vectorstores/memory";
+import { retrieve } from "./store";
 
 const ZHIPU_BASE_URL = "https://open.bigmodel.cn/api/paas/v4";
 
@@ -27,8 +27,6 @@ ${input.context}
 
 /**
  * 直接用 fetch 调智谱 chat/completions 接口
- * - 不依赖 @langchain/openai，避免它内部初始化 OpenAI client 时丢失 apiKey
- * - 完全可控：headers / body / error handling 都在这一个函数里
  */
 async function callZhipuLLM(promptText: string): Promise<string> {
   const apiKey = process.env.ZHIPU_API_KEY;
@@ -48,7 +46,6 @@ async function callZhipuLLM(promptText: string): Promise<string> {
       messages: [{ role: "user", content: promptText }],
       temperature: 0,
     }),
-    // 30 秒超时，避免卡住
     signal: AbortSignal.timeout(30_000),
   });
 
@@ -75,28 +72,42 @@ async function callZhipuLLM(promptText: string): Promise<string> {
   return answer;
 }
 
-export function createRAGChain(vectorStore: MemoryVectorStore) {
-  const retriever = vectorStore.asRetriever({ k: 3 });
+/**
+ * 功能 4：Chain 直接走 Qdrant 混合检索，不再依赖 MemoryVectorStore
+ * - 检索层：`retrieve()` 内部做混合搜索（向量 + 关键词）
+ * - 推理层：`callZhipuLLM()` 调智谱 LLM
+ */
+export function createRAGChain() {
+  const retriever = new RunnableLambda({
+    func: async (question: string) => {
+      const docs = await retrieve(question, 3);
+      console.log(`🔍 检索到 ${docs.length} 条相关文档`);
+      docs.forEach((d, i) => {
+        const vs = (d.metadata.vectorScore as number)?.toFixed?.(3) ?? "-";
+        const ks = (d.metadata.keywordScore as number)?.toFixed?.(3) ?? "-";
+        console.log(
+          `   [${i + 1}] vs=${vs} ks=${ks} ${d.pageContent.substring(0, 70)}...`,
+        );
+      });
+      if (docs.length === 0) return "【未找到相关文档】";
+      return docs.map((d, i) => `[${i + 1}] ${d.pageContent}`).join("\n\n");
+    },
+  });
 
   const chain = RunnableSequence.from([
     {
-      context: retriever.pipe((docs: any[]) => {
-        console.log(`🔍 检索到 ${docs.length} 条相关文档`);
-        docs.forEach((d, i) => {
-          console.log(`   [${i + 1}] ${d.pageContent.substring(0, 80)}...`);
-        });
-        if (docs.length === 0) {
-          return "【未找到相关文档】";
-        }
-        return docs.map((d, i) => `[${i + 1}] ${d.pageContent}`).join("\n\n");
-      }),
+      context: retriever,
       question: new RunnablePassthrough(),
     },
     new RunnableLambda({ func: buildPrompt }),
-    new RunnableLambda({ func: (prompt: string) => {
-      console.log(`\n📤 发送给 LLM 的 prompt (前 200 字):\n${prompt.substring(0, 200)}...\n`);
-      return callZhipuLLM(prompt);
-    }}),
+    new RunnableLambda({
+      func: (prompt: string) => {
+        console.log(
+          `\n📤 发送给 LLM 的 prompt (前 200 字):\n${prompt.substring(0, 200)}...\n`,
+        );
+        return callZhipuLLM(prompt);
+      },
+    }),
   ]);
 
   return chain;
