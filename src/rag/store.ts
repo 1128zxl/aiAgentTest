@@ -393,6 +393,53 @@ export async function getPointCountPublic(): Promise<number> {
   return getPointCount();
 }
 
+// ==================== 热更新 API（运行时更新，无需重启） ====================
+
+import { loadLocalFile } from "./loader";
+import { splitDocuments } from "./splitter";
+
+/**
+ * 热更新：向量化单个文件并存入 Qdrant
+ * 用于：上传文档后立即生效
+ */
+export async function embedSingleFile(filePath: string): Promise<number> {
+  const fs = require("fs") as typeof import("fs");
+
+  const stat = fs.statSync(filePath);
+  const doc = await loadLocalFile(filePath);
+  const splits = await splitDocuments([doc]);
+
+  if (splits.length === 0) {
+    console.warn(`⚠️  文件 ${filePath} 切分后无内容`);
+    return 0;
+  }
+
+  await addDocumentsToStore(splits);
+
+  // 更新状态文件
+  const state = loadFileState();
+  state[filePath] = stat.mtimeMs;
+  saveFileState(state);
+
+  console.log(`✅ 文件 ${filePath} 已热更新 (${splits.length} 块)`);
+  return splits.length;
+}
+
+/**
+ * 热删除：从 Qdrant 中删除单个文件的所有向量
+ * 用于：删除文档后立即生效
+ */
+export async function deleteSingleFile(filePath: string): Promise<void> {
+  await deletePointsBySource(filePath);
+
+  // 更新状态文件
+  const state = loadFileState();
+  delete state[filePath];
+  saveFileState(state);
+
+  console.log(`✅ 文件 ${filePath} 已从向量库中删除`);
+}
+
 export async function vectorStoreExists(): Promise<boolean> {
   try {
     const exists = await collectionExists();

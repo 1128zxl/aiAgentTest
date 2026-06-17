@@ -5,3 +5,4 @@ node_modules/
 dist/
 build/
 .qdrant-state.json
+data/

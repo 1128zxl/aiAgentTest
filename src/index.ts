@@ -32,7 +32,7 @@ app.use(express.json({ limit: "10mb" }));
 app.use("/api", chatRouter);
 
 const PORT = process.env.PORT || 3000;
-const DATA_DIR = "./data";
+const DATA_DIR = path.resolve("./data");
 
 /**
  * 扫描 data/ 目录，读取每个文档的内容和修改时间
@@ -47,6 +47,17 @@ async function scanDataDir(): Promise<
   }
 
   const files = fs.readdirSync(DATA_DIR).filter((f: string) => {
+    // 跳过目录
+    const filePath = path.join(DATA_DIR, f);
+    if (fs.statSync(filePath).isDirectory()) return false;
+    
+    // 跳过隐藏文件（以 . 开头）
+    if (f.startsWith(".")) return false;
+    
+    // 跳过 Word 临时文件（以 ~$ 开头）
+    if (f.startsWith("~$")) return false;
+    
+    // 只保留支持的文件类型
     const ext = path.extname(f).toLowerCase();
     return ext === ".md" || ext === ".docx";
   });
