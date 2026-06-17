@@ -34,8 +34,9 @@ export async function initChat() {
 router.post("/chat", async (req: Request, res: Response) => {
   console.log("收到提问:", req.body?.question);
   console.log("knowledgeBaseOnly 参数:", req.body?.knowledgeBaseOnly);
+  console.log("history 参数:", JSON.stringify(req.body?.history));
   try {
-    const { question, knowledgeBaseOnly = true } = req.body;
+    const { question, knowledgeBaseOnly = true, history = [] } = req.body;
     if (!question) {
       res.status(400).json({ error: "请提供 question 字段" });
       return;
@@ -44,7 +45,7 @@ router.post("/chat", async (req: Request, res: Response) => {
       res.status(500).json({ error: "RAG Chain 未初始化" });
       return;
     }
-    const answer = await chain.invoke({ question, knowledgeBaseOnly });
+    const answer = await chain.invoke({ question, knowledgeBaseOnly, history });
     res.json({ answer: answer.answer, sources: answer.sources });
   } catch (error: any) {
     console.error("问答出错:", error);

@@ -170,7 +170,7 @@ async function submitQuestion(question) {
   if (!question.trim() || loading.value || isRequesting.value) return
 
   isRequesting.value = true
-  
+
   chatHistory.value.push({
     type: 'user',
     content: question,
@@ -182,9 +182,15 @@ async function submitQuestion(question) {
 
   try {
     console.log(`📤 提交问题，knowledgeBaseOnly: ${knowledgeBaseOnly.value}`)
+    // 构建发送给后端的历史记录（只包含对话内容，不包含时间等元数据）
+    const history = chatHistory.value.slice(0, -1).map(msg => ({
+      role: msg.type === 'user' ? 'user' : 'assistant',
+      content: msg.content
+    }))
     const res = await axios.post('/api/chat', { 
       question,
-      knowledgeBaseOnly: knowledgeBaseOnly.value
+      knowledgeBaseOnly: knowledgeBaseOnly.value,
+      history  // 传递对话历史
     })
     chatHistory.value.push({
       type: 'assistant',

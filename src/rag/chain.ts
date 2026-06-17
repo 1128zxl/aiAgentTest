@@ -43,9 +43,33 @@ function calculateDynamicThreshold(scores: number[]): number {
 /**
  * 把检索到的文档片段和用户问题拼成最终发给 LLM 的提示词
  */
-function buildPrompt(input: { context: string; question: string; knowledgeBaseOnly: boolean }): string {
+function buildPrompt(input: { 
+  context: string; 
+  question: string; 
+  knowledgeBaseOnly: boolean;
+  history?: Array<{ role: string; content: string }>;
+}): string {
+  console.log("📜 buildPrompt 收到的 history:", JSON.stringify(input.history));
+  
+  // ========== 对话历史部分 ==========
+  let historySection = "";
+  if (input.history && input.history.length > 0) {
+    // 把历史对话格式化为可读的文本
+    const historyText = input.history
+      .map(msg => `${msg.role === 'user' ? '用户' : '助手'}: ${msg.content}`)
+      .join('\n');
+    
+    historySection = `
+【对话历史】
+以下是我们之前的对话内容，请结合历史上下文来回答当前问题：
+${historyText}
+
+`;
+  }
+  // ========== 对话历史部分结束 ==========
+
   if (!input.knowledgeBaseOnly && !input.context) {
-    return `你是一位专业的智能助手，拥有丰富的知识储备。请根据你的专业知识，详细、准确地回答用户的问题。
+    return `${historySection}你是一位专业的智能助手，拥有丰富的知识储备。请根据你的专业知识，结合上面的对话历史，详细、准确地回答用户的问题。
 
 用户问题：${input.question}
 
@@ -53,9 +77,9 @@ function buildPrompt(input: { context: string; question: string; knowledgeBaseOn
   }
   
   if (!input.knowledgeBaseOnly) {
-    return `你是一个专业的业务问答助手。
+    return `${historySection}你是一个专业的业务问答助手。
 
-任务：根据提供的参考信息回答用户问题。
+任务：根据提供的参考信息和对话历史回答用户问题。
 
 参考信息：
 ${input.context}
@@ -71,7 +95,7 @@ ${input.context}
 请给出详细、准确的回答。`;
   }
   
-  return `你是一个专业的业务问答助手，负责根据参考信息准确回答用户问题。
+  return `${historySection}你是一个专业的业务问答助手，负责根据参考信息准确回答用户问题。
 
 参考信息：
 ${input.context}
@@ -163,7 +187,7 @@ async function callZhipuLLM(promptText: string): Promise<string> {
  */
 export function createRAGChain() {
   const retriever = new RunnableLambda({
-    func: async (input: { question: string; knowledgeBaseOnly: boolean }) => {
+    func: async (input: { question: string; knowledgeBaseOnly: boolean; history: any[] }) => {
       console.log(`🔍 检索模式: ${input.knowledgeBaseOnly ? '仅知识库' : '允许外部搜索'}`);
       const docs = await retrieve(input.question, 5);
       console.log(`🔍 检索到 ${docs.length} 条相关文档`);
@@ -209,12 +233,13 @@ export function createRAGChain() {
       
       if (relevantDocs.length === 0) {
         console.log(`ℹ️  知识库无匹配结果，${input.knowledgeBaseOnly ? '返回空上下文' : '将使用LLM知识库回答'}`);
-        return { context: "", sources: [] };
+        return { context: "", sources: [], history: input.history };
       }
       
       return {
         context: relevantDocs.map((d, i) => `[${i + 1}] ${d.pageContent}`).join("\n\n"),
         sources,
+        history: input.history,
       };
     },
   });
@@ -224,11 +249,12 @@ export function createRAGChain() {
       retrieved: retriever,
     }),
     new RunnableLambda({
-      func: (input: { question: string; knowledgeBaseOnly: boolean; retrieved: { context: string; sources: string[] } }) => {
+      func: (input: { question: string; knowledgeBaseOnly: boolean; retrieved: { context: string; sources: string[]; history: any[] } }) => {
         const prompt = buildPrompt({
           context: input.retrieved.context,
           question: input.question,
           knowledgeBaseOnly: input.knowledgeBaseOnly,
+          history: input.retrieved.history,
         });
         console.log(
           `\n📤 发送给 LLM 的 prompt (前 200 字):\n${prompt.substring(0, 200)}...\n`,
