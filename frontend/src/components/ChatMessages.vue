@@ -31,7 +31,29 @@
           <span class="message-name">{{ msg.type === 'user' ? '我' : '知识库助手' }}</span>
           <span class="message-time">{{ msg.time }}</span>
         </div>
-        <div class="message-text">{{ msg.content }}</div>
+        <div v-if="msg.type === 'assistant'" class="assistant-content">
+          <template v-if="hasAnalysis(msg.content)">
+            <div class="analysis-section">
+              <div class="analysis-header" @click="toggleAnalysis(index)">
+                <div class="analysis-title">
+                  <span class="analysis-icon">🔍</span>
+                  <span>分析过程</span>
+                </div>
+                <span class="toggle-icon">{{ expandedIndices.has(index) ? '▼' : '▶' }}</span>
+              </div>
+              <div v-if="expandedIndices.has(index)" class="analysis-body">
+                <div v-for="(line, i) in parseAnalysis(msg.content)" :key="i" class="analysis-line">
+                  <span class="analysis-num">{{ i + 1 }}.</span>
+                  <span class="analysis-text" v-html="parseMarkdown(line)"></span>
+                </div>
+              </div>
+            </div>
+          </template>
+          <div class="answer-section">
+            <div class="answer-content" v-html="parseMarkdown(hasAnalysis(msg.content) ? parseAnswer(msg.content) : msg.content)"></div>
+          </div>
+        </div>
+        <div v-else class="message-text" v-html="parseMarkdown(msg.content)"></div>
         <div v-if="msg.sources && msg.sources.length" class="message-sources">
           <span class="sources-label">📎 参考：</span>
           <span v-for="(src, i) in msg.sources" :key="i" class="source-tag">{{ src }}</span>
@@ -73,6 +95,61 @@ const props = defineProps({
 defineEmits(['quickQuestion'])
 
 const messagesContainer = ref(null)
+const expandedIndices = ref(new Set())
+
+function toggleAnalysis(index) {
+  if (expandedIndices.value.has(index)) {
+    expandedIndices.value.delete(index)
+  } else {
+    expandedIndices.value.add(index)
+  }
+}
+
+function hasAnalysis(content) {
+  return content.includes('【分析过程】') || content.includes('[分析过程]')
+}
+
+function parseAnalysis(content) {
+  const analysisStart = content.indexOf('【分析过程】') >= 0 ? content.indexOf('【分析过程】') : content.indexOf('[分析过程]')
+  const answerStart = content.indexOf('【最终答案】') >= 0 ? content.indexOf('【最终答案】') : content.indexOf('[最终答案]')
+  
+  if (analysisStart < 0) return []
+  
+  const end = answerStart > 0 ? answerStart : content.length
+  const analysisContent = content.substring(analysisStart + 5, end).trim()
+  
+  return analysisContent.split('\n').filter(line => {
+    const trimmed = line.trim()
+    return trimmed && !trimmed.startsWith('【') && !trimmed.startsWith('】') && !trimmed.startsWith('[') && !trimmed.startsWith(']')
+  }).map(line => {
+    return line.replace(/^[\d\.\-\s]+/, '').trim().replace(/^[】\]]/, '').trim()
+  })
+}
+
+function parseAnswer(content) {
+  const answerStart = content.indexOf('【最终答案】') >= 0 ? content.indexOf('【最终答案】') : content.indexOf('[最终答案]')
+  
+  if (answerStart < 0) return content
+  
+  let answerContent = content.substring(answerStart + 5).trim()
+  answerContent = answerContent.replace(/^[】\]]/, '').trim()
+  
+  return answerContent
+}
+
+function parseMarkdown(text) {
+  if (!text) return ''
+  
+  let result = text
+  
+  result = result.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+  
+  result = result.replace(/`([^`]+)`/g, '<code>$1</code>')
+  
+  result = result.replace(/\n/g, '<br>')
+  
+  return result
+}
 
 const quickQuestions = [
   '年假有几天？',
@@ -217,6 +294,107 @@ watch(() => props.loading, (newVal) => {
   color: #333;
   border-top-left-radius: 4px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+}
+
+.assistant-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.analysis-section {
+  background: #f8fafc;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+}
+
+.analysis-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  cursor: pointer;
+  background: #f1f5f9;
+}
+
+.analysis-header:hover {
+  background: #e2e8f0;
+}
+
+.analysis-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  color: #475569;
+}
+
+.analysis-icon {
+  font-size: 16px;
+}
+
+.toggle-icon {
+  font-size: 12px;
+  color: #94a3b8;
+  transition: transform 0.2s;
+}
+
+.analysis-body {
+  padding: 12px 14px;
+}
+
+.analysis-line {
+  display: flex;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.analysis-line:last-child {
+  border-bottom: none;
+}
+
+.analysis-num {
+  color: #6366f1;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.analysis-text {
+  color: #475569;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.answer-section {
+  background: linear-gradient(135deg, #eef2ff 0%, #f0f9ff 100%);
+  border-radius: 8px;
+  padding: 12px 14px;
+  border-left: 3px solid #6366f1;
+}
+
+.answer-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.answer-icon {
+  font-size: 14px;
+}
+
+.answer-label {
+  font-weight: 600;
+  color: #1e293b;
+  font-size: 13px;
+}
+
+.answer-content {
+  color: #334155;
+  font-size: 14px;
+  line-height: 1.6;
 }
 
 .message-meta {

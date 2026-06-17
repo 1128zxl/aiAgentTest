@@ -1,43 +1,51 @@
 <template>
-  <aside class="sidebar">
-    <div class="sidebar-header">
-      <h3>📁 文档库</h3>
-      <div class="sidebar-actions">
-        <button @click="$emit('refresh')" class="action-btn" title="刷新">
-          <span>🔄</span>
-        </button>
-        <button @click="$emit('upload')" class="action-btn upload-btn" title="上传文档">
-          <span>📤</span>
-        </button>
+  <transition name="sidebar">
+    <aside v-show="!collapsed" class="sidebar">
+      <div class="sidebar-header">
+        <h3>📁 文档库</h3>
+        <div class="sidebar-actions">
+          <button @click="$emit('refresh')" class="action-btn" title="刷新">
+            <span>🔄</span>
+          </button>
+          <button @click="$emit('upload')" class="action-btn upload-btn" title="上传文档">
+            <span>📤</span>
+          </button>
+        </div>
       </div>
-    </div>
-    <div class="doc-list">
-      <div
-        v-for="doc in documents"
-        :key="doc.name"
-        class="doc-item"
-      >
-        <span class="doc-icon">{{ doc.type === 'md' ? '📝' : '📄' }}</span>
-        <span class="doc-name">{{ doc.name }}</span>
-        <span class="doc-size">{{ formatSize(doc.size) }}</span>
-        <button @click="$emit('delete', doc.name)" class="delete-btn" title="删除">
-          <span>🗑️</span>
-        </button>
+      
+      <div class="sidebar-body">
+        <div class="doc-list">
+          <div
+            v-for="doc in documents"
+            :key="doc.name"
+            class="doc-item"
+          >
+            <span class="doc-icon">{{ doc.type === 'md' ? '📝' : '📄' }}</span>
+            <span class="doc-name">{{ doc.name }}</span>
+            <span class="doc-size">{{ formatSize(doc.size) }}</span>
+            <button @click="$emit('delete', doc.name)" class="delete-btn" title="删除">
+              <span>🗑️</span>
+            </button>
+          </div>
+          <div v-if="documents.length === 0" class="empty-state">
+            <span>📭 暂无文档</span>
+            <button @click="$emit('upload')" class="upload-hint-btn">
+              上传文档
+            </button>
+          </div>
+        </div>
       </div>
-      <div v-if="documents.length === 0" class="empty-state">
-        <span>📭 暂无文档</span>
-        <button @click="$emit('upload')" class="upload-hint-btn">
-          上传文档
-        </button>
+      
+      <div class="sidebar-footer">
+        <span>📊 共 {{ docCount }} 个文档</span>
       </div>
-    </div>
-    <div class="sidebar-footer">
-      <span>📊 共 {{ docCount }} 个文档</span>
-    </div>
-  </aside>
+    </aside>
+  </transition>
 </template>
 
 <script setup>
+import { ref, inject, onMounted, watch } from 'vue'
+
 defineProps({
   documents: {
     type: Array,
@@ -50,6 +58,34 @@ defineProps({
 })
 
 defineEmits(['refresh', 'upload', 'delete'])
+
+const externalCollapsed = inject('sidebarCollapsed', ref(false))
+const externalToggle = inject('toggleSidebar', null)
+const collapsed = ref(externalCollapsed.value)
+
+watch(externalCollapsed, (newVal) => {
+  collapsed.value = newVal
+})
+
+onMounted(() => {
+  const saved = localStorage.getItem('sidebar-collapsed')
+  if (saved === 'true' && !externalCollapsed.value) {
+    if (externalToggle) {
+      externalToggle()
+    } else {
+      collapsed.value = true
+    }
+  }
+})
+
+function toggleCollapsed() {
+  if (externalToggle) {
+    externalToggle()
+  } else {
+    collapsed.value = !collapsed.value
+    localStorage.setItem('sidebar-collapsed', String(collapsed.value))
+  }
+}
 
 function formatSize(bytes) {
   if (bytes < 1024) return bytes + ' B'
@@ -67,6 +103,7 @@ function formatSize(bytes) {
   flex-direction: column;
   overflow: hidden;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  flex-shrink: 0;
 }
 
 .sidebar-header {
@@ -96,6 +133,8 @@ function formatSize(bytes) {
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s;
+  font-size: 12px;
+  color: #555;
 }
 
 .action-btn:hover {
@@ -107,9 +146,41 @@ function formatSize(bytes) {
   color: #1976d2;
 }
 
-.doc-list {
+.action-btn.collapse-btn:hover {
+  background: #ffe0e0;
+  color: #e57373;
+}
+
+.sidebar-body {
   flex: 1;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.doc-collapse {
+  flex: 1;
+  border: none;
+}
+
+.doc-collapse :deep(.el-collapse-item__header) {
+  padding: 0 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #495057;
+  background: #fafafa;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.doc-collapse :deep(.el-collapse-item__wrap) {
+  border: none;
+}
+
+.doc-collapse :deep(.el-collapse-item__content) {
+  padding: 0;
+}
+
+.doc-list {
   padding: 8px;
 }
 
@@ -188,6 +259,53 @@ function formatSize(bytes) {
   border-top: 1px solid #f0f0f0;
   font-size: 12px;
   color: #888;
+}
+
+/* 侧边栏收起后的浮动按钮 */
+.collapse-toggle {
+  width: 40px;
+  height: 40px;
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  z-index: 10;
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+
+.collapse-toggle:hover {
+  background: #f5f5f5;
+  color: #667eea;
+}
+
+.toggle-icon {
+  font-size: 14px;
+  color: #555;
+}
+
+/* 按钮过渡动画 */
+.toggle-btn-enter-active,
+.toggle-btn-leave-active {
+  transition: all 0.2s ease;
+}
+
+/* 折叠过渡动画 */
+.sidebar-enter-active,
+.sidebar-leave-active {
+  transition: all 0.3s ease;
+  overflow: hidden;
+}
+
+.sidebar-enter-from,
+.sidebar-leave-to {
+  width: 0;
+  opacity: 0;
+  transform: translateX(-20px);
 }
 
 ::-webkit-scrollbar {

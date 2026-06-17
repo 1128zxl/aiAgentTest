@@ -9,6 +9,38 @@ import { retrieve } from "./store";
 const ZHIPU_BASE_URL = "https://open.bigmodel.cn/api/paas/v4";
 
 /**
+ * 根据分数分布计算动态阈值
+ * - 如果分数差异大（标准差大），提高阈值，只保留高质量结果
+ * - 如果分数差异小（标准差小），降低阈值，保留更多结果
+ * - 关键约束：阈值不能超过最高分，避免过滤掉所有文档
+ */
+function calculateDynamicThreshold(scores: number[]): number {
+  if (scores.length === 0) return 0.25;
+  
+  const mean = scores.reduce((a, b) => a + b, 0) / scores.length;
+  const maxScore = Math.max(...scores);
+  
+  const variance = scores.reduce((sum, score) => {
+    return sum + Math.pow(score - mean, 2);
+  }, 0) / scores.length;
+  const stdDev = Math.sqrt(variance);
+  
+  const baseThreshold = 0.25;
+  const adjustmentFactor = stdDev * 1.5;
+  
+  let dynamicThreshold = baseThreshold + adjustmentFactor;
+  
+  // 关键修复：动态阈值不能超过最高分的95%，避免过滤掉所有文档
+  // 留5%的余地，确保至少最高分的文档能通过
+  dynamicThreshold = Math.min(dynamicThreshold, maxScore * 0.95);
+  
+  dynamicThreshold = Math.max(0.2, dynamicThreshold);
+  dynamicThreshold = Math.min(0.6, dynamicThreshold);
+  
+  return dynamicThreshold;
+}
+
+/**
  * 把检索到的文档片段和用户问题拼成最终发给 LLM 的提示词
  */
 function buildPrompt(input: { context: string; question: string; knowledgeBaseOnly: boolean }): string {
@@ -44,31 +76,34 @@ ${input.context}
 参考信息：
 ${input.context}
 
+**重要提醒：**
+- 以上参考信息可能包含多个文档的内容，但并非所有文档都与当前问题相关
+- 请仔细判断每个文档片段是否与用户问题真正相关
+- 如果某个文档与问题无关，请忽略它的内容，不要使用其中的任何信息
+- 如果某个文档只部分相关，请只提取与问题相关的部分
+- 只使用真正相关的内容来回答，不要被无关信息干扰
+
 用户问题：${input.question}
 
+**回答格式要求：**
+
+【分析过程】
+1. 用户问题中的关键条件：{请提取问题中的数字、时间、条件等关键信息}
+2. 参考信息中的相关内容：{请列出参考信息中与问题相关的所有条款}
+3. 逻辑判断：{请说明条件如何匹配参考信息中的条款，如果涉及范围判断，请明确指出条件落在哪个区间}
+
+【最终答案】
+{直接给出答案，保持适当的换行和格式，使用数字序号(1. 2. 3.)或项目符号(-)来组织内容}
+
 **回答规则：**
-1. **必须完全基于参考信息回答，不使用任何外部知识**
-2. **仔细分析用户问题中的关键条件**（如入职年限、金额、时间等）
-3. **如果问题涉及年限判断，找到参考信息中所有相关的年限节点**
-4. **确定用户的年限落在哪个区间范围内**：
-   - 如果用户年限 >= 某个节点，且 < 下一个节点，则适用当前节点的规则
-   - 如果用户年限 >= 最大节点，则适用最大节点的规则
-5. **根据匹配的规则，直接给出答案**，不需要列出所有可能的情况
-6. **如果参考信息中没有相关内容或无法确定答案，请说"抱歉，我暂时没有找到相关信息"**
+1. **必须完全基于参考信息中与问题相关的内容回答，不使用任何外部知识**
+2. 严格按照上述格式回答，先输出分析过程，再输出最终答案
+3. 如果参考信息中**完全没有相关内容**，请在【最终答案】中回答"抱歉，我暂时没有找到相关信息"
+4. 如果参考信息中有相关内容但信息不完整（如缺少部分条件），请根据已有信息给出部分答案，并说明需要补充的信息
+5. 对于涉及范围或条件的问题，如果用户未提供完整条件，应列出所有可能的情况和对应的结果
+6. 【最终答案】中的内容如果包含多条信息，请使用数字序号(1. 2. 3.)或项目符号(-)分行列出，保持清晰的换行格式
 
-**示例：**
-- 参考信息："入职满1年后，享有5天年假。入职满5年后，年假增加至10天。"
-- 用户问："入职2年有几天年假？"
-- 分析：2年 >= 1年 且 2年 < 5年，所以适用"满1年"的规则
-- 正确回答："入职2年后，您享有5天年假。"
-
-**另一个示例：**
-- 参考信息："入职满1年后，享有5天年假。入职满5年后，年假增加至10天。"
-- 用户问："入职6年有几天年假？"
-- 分析：6年 >= 5年，所以适用"满5年"的规则
-- 正确回答："入职6年后，您享有10天年假。"
-
-请根据以上规则直接回答用户的问题。`;
+请根据以上规则回答用户的问题。`;
 }
 
 /**
@@ -88,11 +123,13 @@ async function callZhipuLLM(promptText: string): Promise<string> {
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: "glm-4-flash",
+      model: "glm-4",
       messages: [{ role: "user", content: promptText }],
       temperature: 0,
+      max_tokens: 4096,
+      timeout: 300,
     }),
-    signal: AbortSignal.timeout(30_000),
+    signal: AbortSignal.timeout(300_000),
   });
 
   const text = await res.text();
@@ -131,14 +168,25 @@ export function createRAGChain() {
       const docs = await retrieve(input.question, 5);
       console.log(`🔍 检索到 ${docs.length} 条相关文档`);
       
-      const MIN_SCORE = 0.35;
-      const relevantDocs = docs.filter(d => {
+      const scores = docs.map(d => d.metadata.combinedScore as number || 0);
+      const maxScore = Math.max(...scores);
+      const avgScore = scores.reduce((a, b) => a + b, 0) / scores.length;
+      const dynamicThreshold = calculateDynamicThreshold(scores);
+      
+      console.log(`📊 分数分布 - 最高分: ${maxScore.toFixed(3)}, 平均分: ${avgScore.toFixed(3)}, 动态阈值: ${dynamicThreshold.toFixed(3)}`);
+      
+      const hasRelevantDocs = maxScore >= 0.3 && avgScore >= 0.15;
+      console.log(`🎯 相关性检测 - 是否有相关文档: ${hasRelevantDocs} (最高分>=0.3: ${maxScore >= 0.3}, 平均分>=0.15: ${avgScore >= 0.15})`);
+      
+      let relevantDocs = docs.filter(d => {
         const combinedScore = d.metadata.combinedScore as number || 0;
-        const content = d.pageContent.toLowerCase();
-        const question = input.question.toLowerCase();
-        const hasRelevantContent = content.includes("年假") || content.includes("休假") || content.includes("假期");
-        return combinedScore >= MIN_SCORE && hasRelevantContent;
+        return combinedScore >= dynamicThreshold;
       });
+      
+      if (!hasRelevantDocs) {
+        console.log(`⚠️  检测到无高相关性文档，清空参考信息`);
+        relevantDocs = [];
+      }
       
       console.log(`📝 过滤后有效参考文档: ${relevantDocs.length} 条`);
       

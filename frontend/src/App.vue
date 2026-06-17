@@ -12,11 +12,41 @@
       />
       
       <main class="chat-main">
-        <ChatHeader
-          :knowledgeBaseOnly="knowledgeBaseOnly"
-          @toggleMode="knowledgeBaseOnly = !knowledgeBaseOnly"
-          @clearChat="clearChat"
-        />
+        <div class="chat-header-row">
+          <div class="chat-toolbar">
+            <button 
+              class="toolbar-collapse-btn" 
+              @click="toggleSidebar"
+              :title="sidebarCollapsed ? '展开文档库' : '收起文档库'"
+            >
+              <!-- 展开状态：打开的书本 -->
+              <svg v-if="!sidebarCollapsed" width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M4 4H12C13.6569 4 15 5.34315 15 7V17C15 18.6569 13.6569 20 12 20H4C2.34315 20 1 18.6569 1 17V7C1 5.34315 2.34315 4 4 4Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M13 4H20C21.6569 4 23 5.34315 23 7V17C23 18.6569 21.6569 20 20 20H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M12 4V20" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                <path d="M6 8H10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                <path d="M6 11H9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                <path d="M6 14H10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                <path d="M14 8H18" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                <path d="M14 11H17" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                <path d="M14 14H18" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+              </svg>
+              <!-- 收起状态：合上的书本 -->
+              <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M2 3H8C9.65685 3 11 4.34315 11 6V18C11 19.6569 9.65685 21 8 21H2C0.343146 21 -5.32907e-08 19.6569 0 18V6C-5.32907e-08 4.34315 0.343146 3 2 3Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M5 7H7" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                <path d="M5 10H7" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                <path d="M5 13H7" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                <path d="M5 16H7" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+              </svg>
+            </button>
+          </div>
+          <ChatHeader
+            :knowledgeBaseOnly="knowledgeBaseOnly"
+            @toggleMode="knowledgeBaseOnly = !knowledgeBaseOnly"
+            @clearChat="clearChat"
+          />
+        </div>
         
         <ChatMessages
           :chatHistory="chatHistory"
@@ -40,7 +70,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, provide } from 'vue'
 import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
@@ -54,17 +84,32 @@ import UploadModal from './components/UploadModal.vue'
 const searchQuery = ref('')
 const chatHistory = ref([])
 const loading = ref(false)
+const isRequesting = ref(false)
 const documents = ref([])
 const docCount = ref(0)
 const online = ref(true)
 const showUploadModal = ref(false)
 const knowledgeBaseOnly = ref(true)
+const sidebarCollapsed = ref(false)
+
+provide('sidebarCollapsed', sidebarCollapsed)
+provide('toggleSidebar', toggleSidebar)
 
 onMounted(() => {
   loadDocuments()
   checkHealth()
   setInterval(checkHealth, 5000)
+  // 同步 Sidebar 组件的折叠状态
+  const saved = localStorage.getItem('sidebar-collapsed')
+  if (saved === 'true') {
+    sidebarCollapsed.value = true
+  }
 })
+
+function toggleSidebar() {
+  sidebarCollapsed.value = !sidebarCollapsed.value
+  localStorage.setItem('sidebar-collapsed', String(sidebarCollapsed.value))
+}
 
 async function checkHealth() {
   try {
@@ -122,8 +167,10 @@ function formatTime(date) {
 }
 
 async function submitQuestion(question) {
-  if (!question.trim() || loading.value) return
+  if (!question.trim() || loading.value || isRequesting.value) return
 
+  isRequesting.value = true
+  
   chatHistory.value.push({
     type: 'user',
     content: question,
@@ -154,6 +201,7 @@ async function submitQuestion(question) {
     })
   } finally {
     loading.value = false
+    isRequesting.value = false
   }
 }
 </script>
@@ -193,6 +241,48 @@ body {
   border-radius: 12px;
   overflow: hidden;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  position: relative;
+}
+
+.chat-header-row {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid #f0f0f0;
+  min-height: 60px;
+}
+
+.chat-header-row > :deep(.chat-header) {
+  flex: 1;
+  border-bottom: none;
+  padding-left: 0;
+}
+
+.chat-toolbar {
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  border-right: 1px solid #f0f0f0;
+  height: 60px;
+}
+
+.toolbar-collapse-btn {
+  width: 32px;
+  height: 32px;
+  background: #f8f8f8;
+  border: 1px solid #e8e8e8;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #555;
+  transition: all 0.2s;
+}
+
+.toolbar-collapse-btn:hover {
+  background: #f0f4ff;
+  color: #667eea;
+  border-color: #667eea;
 }
 
 @media (max-width: 768px) {
